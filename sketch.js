@@ -192,11 +192,6 @@ function planetSketch() {
     }
 
     let mask = quickLayer(res*3);
-    mask.ctx.drawImage(sky.canvas, 0, 0, mask.canvas.width, mask.canvas.height);
-    mask.ctx.beginPath();
-    mask.ctx.arc(mask.canvas.width/2, mask.canvas.height/2, planet_rad, 0, Math.PI * 2);
-    mask.ctx.clip();
-    mask.ctx.clearRect(0, 0, mask.canvas.width, mask.canvas.height);
 
     let preparedPlanetYLayers = flatPlanetLayers.map(
         l => prepareCanvasWarpY(l.canvas)
@@ -210,7 +205,9 @@ function planetSketch() {
     let combined = quickLayer(planet_rad*2);
 
     let rot = 0;
+    let skyRot = 0;
     let speed = 0.01;
+    let skySpeed = 0.005;
     let doUpdate = false;
 
     let update = () => {
@@ -218,20 +215,31 @@ function planetSketch() {
         preparedPlanetXLayers.forEach(
             (lx, i) => {
                 warpCanvasViewX(preparedPlanetYLayers[i], lx, rot+=speed);
-                if (i === PLANET_LAYER_ORDER.WATER) {
-                    lx.ctx.globalAlpha = 0.4;
-                    lx.ctx.globalCompositeOperation = "source-atop";
-                    lx.ctx.drawImage(sky.canvas, 0, 0, lx.canvas.width, lx.canvas.height);
-                    lx.ctx.globalAlpha = 0.8;
-                    lx.ctx.drawImage(sun.canvas, 80, -40, lx.canvas.width, lx.canvas.height);
+                switch (i) {
+                    case PLANET_LAYER_ORDER.WATER:
+                        lx.ctx.globalAlpha = 0.6;
+                        lx.ctx.globalCompositeOperation = "source-atop";
+                        moveLayer(sky, lx, skyRot, true);
+                        lx.ctx.globalAlpha = 0.8;
+                        lx.ctx.drawImage(sun.canvas, 80, -40, lx.canvas.width, lx.canvas.height);
+                        break;
                 }
                 combined.ctx.drawImage(lx.canvas, 0, 0);
             }
         );
         
+        moveLayer(sky, mask, skyRot += skySpeed);
+        mask.ctx.save();
+        mask.ctx.beginPath();
+        mask.ctx.arc(mask.canvas.width/2, mask.canvas.height/2, planet_rad, 0, Math.PI * 2);
+        mask.ctx.clip();
+        mask.ctx.clearRect(0, 0, mask.canvas.width, mask.canvas.height);
+        mask.ctx.restore();
+
         pctx.drawImage(combined.canvas, topLeftPlanet.x, topLeftPlanet.y, planet_rad*2, planet_rad*2);
         pctx.drawImage(mask.canvas, 0, 0, pcanvas.width, pcanvas.height);
         if(rot > 1) rot = -1;
+        if(skyRot > 1) skyRot = -1;
         if(doUpdate) requestAnimationFrame(update);
     };
     update();

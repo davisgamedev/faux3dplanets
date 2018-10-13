@@ -69,3 +69,11 @@ function resizeRepeat(ctx, canvas, rx, ry) {
         }
     }
 }
+
+function moveLayer(fromLayer, toLayer, rotation, reverse=false) {
+    let draw1 = reverse? map(rotation, 1, -1, -fromLayer.canvas.width, 0) : map(rotation, -1, 1, -fromLayer.canvas.width, 0);
+    let draw2 = draw1 + fromLayer.canvas.width;
+
+    toLayer.ctx.drawImage(fromLayer.canvas, draw1, 0);
+    toLayer.ctx.drawImage(fromLayer.canvas, draw2, 0);
+}
