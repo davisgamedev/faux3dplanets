@@ -1,15 +1,15 @@
-let pcanvas = document.querySelector("#planet-canvas");
-let pctx = pcanvas.getContext('2d');
+let main = {canvas: document.querySelector('#planet-canvas') };
+main.ctx = main.canvas.getContext('2d');
 
 let res = 240;
 let planet_rad = res * 2/3;
 let city_reres = 2;
 
-let keepCanvases = true;
+let keepCanvas = true;
 
 let topLeftPlanet = {
-    x: (pcanvas.width/2) - planet_rad,
-    y: (pcanvas.height/2) - planet_rad
+    x: (main.canvas.width/2) - planet_rad,
+    y: (main.canvas.height/2) - planet_rad
 };
 
 const PLANET_LAYER_ORDER = {
@@ -20,17 +20,15 @@ const PLANET_LAYER_ORDER = {
 }
 
 function quickLayer(width=res, height=null) {
-    console.warn("creating new canvas");
     height = height||width;
     let canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
-    if(keepCanvases) document.body.appendChild(canvas);
+    if(keepCanvas) document.body.appendChild(canvas);
     return {canvas: canvas, ctx: canvas.getContext('2d')};
 }
 
 function drawLayer(initFn, drawFn, rx=1, ry=1, smoothA=true, scale=1, size=res) {
-    console.log("rx: ", rx, ", ry:", ry);
     newNoise();
     let layer = quickLayer(size);
     initFn(layer.ctx, layer.canvas);
@@ -61,7 +59,6 @@ function drawStar() {
         }
         sun.ctx.stroke();
         sun.ctx.globalAlpha = map(i, 0, sun.canvas.width/2, 0.75, -0.2);
-        console.log(sun.ctx.globalAlpha);
         radius++;
     }
     return sun;
@@ -158,12 +155,16 @@ function planetSketch() {
                 ctx.globalAlpha = a + 0.1;
                 ctx.fillRect(x, y, 1, 1);
             }
-            else if(flipCoin(0.07)) {
-                let equator = 1 - Math.abs(y/res - 0.5)*2;
+            else if(flipCoin(0.04)) {
+                let equator = 1-Math.abs(y/res - 0.5)*2;
                 let coast = a/0.6;
                 let luck = Math.random();
 
-                if (equator + coast*25 + luck > 0.7 * 4.5) {
+                let eWeight = 20;
+                let cWeight = 10;
+                let lWeight = 45;
+
+                if ((equator*eWeight + coast*cWeight + luck*lWeight)/(eWeight+cWeight+lWeight) > 0.75) {
                     city.ctx.globalAlpha = Math.random();
                     drawCities(city.ctx, x*city_reres, y*city_reres, scale);
                 }
@@ -173,6 +174,7 @@ function planetSketch() {
     );
     resizeRepeat(city.ctx, city.canvas, 3, 1);
     flatPlanetLayers.push(water);
+    flatPlanetLayers.push(city);
 
     let clouds = [];
     let h = randomTo(360);
@@ -191,7 +193,8 @@ function planetSketch() {
         );
     }
 
-    let mask = quickLayer(res*3);
+    //todo, rename assembledPlanet to assembledPlanetPlanet
+    //draw sky to assembledPlanetAll, draw mask to assembledPlanetA
 
     let preparedPlanetYLayers = flatPlanetLayers.map(
         l => prepareCanvasWarpY(l.canvas)
@@ -201,20 +204,26 @@ function planetSketch() {
     for(let i = 0; i < preparedPlanetYLayers.length; i++) {
         preparedPlanetXLayers.push(quickLayer(planet_rad*2, planet_rad*2));
     }
+    
+    let mask = quickLayer(res*3);
+    mask.ctx.beginPath();
+    mask.ctx.arc(mask.canvas.width/2, mask.canvas.height/2, planet_rad, 0, Math.PI * 2);
+    mask.ctx.fill();
 
-    let combined = quickLayer(planet_rad*2);
+    let assembledPlanet = quickLayer(planet_rad*2);
+    let assembledBackground = quickLayer(res*3);
 
-    let rot = 0;
+    let planetRot = 0;
+    let planetSpeed = 0.01;
     let skyRot = 0;
-    let speed = 0.01;
     let skySpeed = 0.005;
+
     let doUpdate = false;
 
     let update = () => {
-        
         preparedPlanetXLayers.forEach(
             (lx, i) => {
-                warpCanvasViewX(preparedPlanetYLayers[i], lx, rot+=speed);
+                warpCanvasViewX(preparedPlanetYLayers[i], lx, planetRot);
                 switch (i) {
                     case PLANET_LAYER_ORDER.WATER:
                         lx.ctx.globalAlpha = 0.6;
@@ -223,22 +232,29 @@ function planetSketch() {
                         lx.ctx.globalAlpha = 0.8;
                         lx.ctx.drawImage(sun.canvas, 80, -40, lx.canvas.width, lx.canvas.height);
                         break;
+                    case PLANET_LAYER_ORDER.BODY:
+                        lx.ctx.globalAlpha = 0.8;
+                        lx.ctx.fillStyle = "black";
+                        lx.ctx.fillRect(0, 0, lx.canvas.width, lx.canvas.height);
+                        lx.ctx.globalAlpha = 0.3;
+                        lx.ctx.drawImage(sun.canvas, -lx.canvas.width/8, -lx.canvas.height * 2/3, lx.canvas.width*2, lx.canvas.height*2);
+                        break;
                 }
-                combined.ctx.drawImage(lx.canvas, 0, 0);
+                assembledPlanet.ctx.drawImage(lx.canvas, 0, 0);
             }
         );
-        
-        moveLayer(sky, mask, skyRot += skySpeed);
-        mask.ctx.save();
-        mask.ctx.beginPath();
-        mask.ctx.arc(mask.canvas.width/2, mask.canvas.height/2, planet_rad, 0, Math.PI * 2);
-        mask.ctx.clip();
-        mask.ctx.clearRect(0, 0, mask.canvas.width, mask.canvas.height);
-        mask.ctx.restore();
+        moveLayer(sky, assembledBackground, skyRot);
 
-        pctx.drawImage(combined.canvas, topLeftPlanet.x, topLeftPlanet.y, planet_rad*2, planet_rad*2);
-        pctx.drawImage(mask.canvas, 0, 0, pcanvas.width, pcanvas.height);
-        if(rot > 1) rot = -1;
+        main.ctx.clearRect(0, 0, main.canvas.width, main.canvas.height);
+        main.ctx.drawImage(mask.canvas, 0, 0, main.canvas.width, main.canvas.height);
+        main.ctx.globalCompositeOperation = "source-in";
+        main.ctx.drawImage(assembledPlanet.canvas, topLeftPlanet.x, topLeftPlanet.y, planet_rad*2, planet_rad*2);
+        main.ctx.globalCompositeOperation = "destination-over";
+        main.ctx.drawImage(assembledBackground.canvas, 0, 0, main.canvas.width, main.canvas.height);
+
+        planetRot += planetSpeed;
+        skyRot += skySpeed;
+        if(planetRot > 1) planetRot = -1;
         if(skyRot > 1) skyRot = -1;
         if(doUpdate) requestAnimationFrame(update);
     };
